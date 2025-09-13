@@ -11,6 +11,7 @@ using System.Runtime.InteropServices;
 using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
@@ -58,6 +59,7 @@ namespace SoftwareInstaller
 
         private StatusStrip _statusStrip = default!;
         private ToolStripStatusLabel _status = default!;
+        private ToolStripProgressBar _progress = default!;
 
         // 数据
         private Catalog _catalog = new();
@@ -133,36 +135,44 @@ namespace SoftwareInstaller
             // 状态条
             _statusStrip = new StatusStrip { Dock = DockStyle.Bottom, SizingGrip = false, BackColor = C_Card };
             _status = new ToolStripStatusLabel("就绪") { ForeColor = C_SubText };
+            _progress = new ToolStripProgressBar { Style = ProgressBarStyle.Marquee, Visible = false, Alignment = ToolStripItemAlignment.Right };
             _statusStrip.Items.Add(_status);
+            _statusStrip.Items.Add(_progress);
             Controls.Add(_statusStrip);
         }
 
         // ----------------- 数据加载 -----------------
-        private async Task LoadListAsync()
+        internal async Task LoadListAsync(Action<int>? threadObserver = null)
         {
             var share = _tbShare.Text.Trim();
             _status.Text = "加载中…";
+            _progress.Visible = true;
 
             try
             {
-                var files = new List<(string path, long size)>();
-
-                await Task.Run(() =>
+                var rows = await Task.Run(() =>
                 {
+                    threadObserver?.Invoke(Thread.CurrentThread.ManagedThreadId);
+                    var list = new List<RowInfo>();
+
                     void Work()
                     {
                         _catalog = TryLoadCatalog(Path.Combine(share, _catalogFileName));
                         if (!Directory.Exists(share)) throw new IOException("无法访问共享路径：" + share);
 
-                        files = Directory.EnumerateFiles(share, "*.*", SearchOption.TopDirectoryOnly)
-                            .Where(p => new[] { ".msi", ".exe" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
-                            .OrderBy(Path.GetFileName)
-                            .Select(p =>
-                            {
-                                var fi = new FileInfo(p);
-                                return (p, fi.Length);
-                            })
-                            .ToList();
+                        foreach (var path in Directory.EnumerateFiles(share, "*.*", SearchOption.TopDirectoryOnly)
+                                 .Where(p => new[] { ".msi", ".exe" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
+                                 .OrderBy(Path.GetFileName))
+                        {
+                            var fi = new FileInfo(path);
+                            var size = fi.Length;
+                            var fileName = Path.GetFileName(path);
+                            var (disp, ver) = GetDisplayAndVersion(path, _catalog);
+                            var detail = $"{(string.IsNullOrWhiteSpace(ver) ? "" : "v " + ver + " · ")}{Path.GetExtension(path).ToLower()} · {(size / 1024.0 / 1024.0):F1} MB";
+                            var desc = _catalog.TryGet(fileName, out var ci2) ? (ci2.Description ?? "") : "";
+                            var icon = _catalog.TryGet(fileName, out var ci) ? ci.Icon : null;
+                            list.Add(new RowInfo(path, size, icon, disp, detail, desc));
+                        }
                     }
 
                     if (_useCredentials)
@@ -174,30 +184,29 @@ namespace SoftwareInstaller
                     {
                         Work();
                     }
+
+                    return list;
                 });
 
                 _list.Controls.Clear();
 
-                foreach (var (path, size) in files)
+                foreach (var info in rows)
                 {
-                    var fileName = Path.GetFileName(path);
-                    var (disp, ver) = GetDisplayAndVersion(path, _catalog);
-
                     var row = new ItemRow(
-                        iconPath: _catalog.TryGet(fileName, out var ci) ? ci.Icon : null,
-                        displayName: disp,
-                        detailLine: $"{(string.IsNullOrWhiteSpace(ver) ? "" : "v " + ver + " · ")}{Path.GetExtension(path).ToLower()} · {(size / 1024.0 / 1024.0):F1} MB",
-                        description: _catalog.TryGet(fileName, out var ci2) ? (ci2.Description ?? "") : "",
+                        iconPath: info.Icon,
+                        displayName: info.DisplayName,
+                        detailLine: info.Detail,
+                        description: info.Description,
                         buttonText: "安装",
                         primary: C_Primary,
                         primaryHover: C_PrimaryHov,
                         text: C_Text,
                         subText: C_SubText,
                         line: C_Line,
-                        sizeBytes: size
+                        sizeBytes: info.SizeBytes
                     )
                     {
-                        Tag = path
+                        Tag = info.Path
                     };
 
                     row.OnPrimaryClick += async (_, __) =>
@@ -220,7 +229,15 @@ namespace SoftwareInstaller
                 _status.Text = "加载失败";
                 MessageBox.Show(ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
+            finally
+            {
+                _progress.Visible = false;
+            }
         }
+
+        internal void SetSharePath(string path) => _tbShare.Text = path;
+
+        private readonly record struct RowInfo(string Path, long SizeBytes, string? Icon, string DisplayName, string Detail, string Description);
 
         private void UpdateStatus()
         {
