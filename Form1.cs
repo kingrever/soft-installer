@@ -1,5 +1,6 @@
 #nullable enable
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
@@ -142,59 +143,26 @@ namespace SoftwareInstaller
             var share = _tbShare.Text.Trim();
             _status.Text = "加载中…";
 
-            await Task.Run(() =>
+            try
             {
-                try
+                var files = new List<(string path, long size)>();
+
+                await Task.Run(() =>
                 {
                     void Work()
                     {
                         _catalog = TryLoadCatalog(Path.Combine(share, _catalogFileName));
                         if (!Directory.Exists(share)) throw new IOException("无法访问共享路径：" + share);
 
-                        var files = Directory.EnumerateFiles(share, "*.*", SearchOption.TopDirectoryOnly)
+                        files = Directory.EnumerateFiles(share, "*.*", SearchOption.TopDirectoryOnly)
                             .Where(p => new[] { ".msi", ".exe" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
                             .OrderBy(Path.GetFileName)
-                            .ToList();
-
-                        Ui(() =>
-                        {
-                            _list.SuspendLayout();
-                            _list.Controls.Clear();
-
-                            foreach (var f in files)
+                            .Select(p =>
                             {
-                                var fi = new FileInfo(f);
-                                var (disp, ver) = GetDisplayAndVersion(f, _catalog);
-
-                                var row = new ItemRow(
-                                    iconPath: _catalog.TryGet(Path.GetFileName(f), out var ci) ? ci.Icon : null,
-                                    displayName: disp,
-                                    detailLine: $"{(string.IsNullOrWhiteSpace(ver) ? "" : "v " + ver + " · ")}{fi.Extension.ToLower()} · {(fi.Length / 1024.0 / 1024.0).ToString("F1")} MB",
-                                    description: _catalog.TryGet(Path.GetFileName(f), out var ci2) ? (ci2.Description ?? "") : "",
-                                    buttonText: "安装",
-                                    primary: C_Primary,
-                                    primaryHover: C_PrimaryHov,
-                                    text: C_Text,
-                                    subText: C_SubText,
-                                    line: C_Line
-                                )
-                                {
-                                    Tag = f
-                                };
-
-                                row.OnPrimaryClick += async (_, __) =>
-                                {
-                                    var fullPath = row.Tag as string;
-                                    if (!string.IsNullOrWhiteSpace(fullPath))
-                                        await InstallAsync(fullPath!);
-                                };
-
-                                _list.Controls.Add(row);
-                            }
-
-                            _list.ResumeLayout();
-                            _status.Text = $"已加载 {_list.Controls.Count} 个安装包";
-                        });
+                                var fi = new FileInfo(p);
+                                return (p, fi.Length);
+                            })
+                            .ToList();
                     }
 
                     if (_useCredentials)
@@ -206,17 +174,61 @@ namespace SoftwareInstaller
                     {
                         Work();
                     }
-                }
-                catch (Exception ex)
+                });
+
+                _list.Controls.Clear();
+
+                foreach (var (path, size) in files)
                 {
-                    Ui(() =>
+                    var fileName = Path.GetFileName(path);
+                    var (disp, ver) = GetDisplayAndVersion(path, _catalog);
+
+                    var row = new ItemRow(
+                        iconPath: _catalog.TryGet(fileName, out var ci) ? ci.Icon : null,
+                        displayName: disp,
+                        detailLine: $"{(string.IsNullOrWhiteSpace(ver) ? "" : "v " + ver + " · ")}{Path.GetExtension(path).ToLower()} · {(size / 1024.0 / 1024.0):F1} MB",
+                        description: _catalog.TryGet(fileName, out var ci2) ? (ci2.Description ?? "") : "",
+                        buttonText: "安装",
+                        primary: C_Primary,
+                        primaryHover: C_PrimaryHov,
+                        text: C_Text,
+                        subText: C_SubText,
+                        line: C_Line,
+                        sizeBytes: size
+                    )
                     {
-                        _list.Controls.Clear();
-                        _status.Text = "加载失败";
-                        MessageBox.Show(ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
-                    });
+                        Tag = path
+                    };
+
+                    row.OnPrimaryClick += async (_, __) =>
+                    {
+                        var fullPath = row.Tag as string;
+                        if (!string.IsNullOrWhiteSpace(fullPath))
+                            await InstallAsync(fullPath!);
+                    };
+                    row.OnCheckChanged += (_, __) => UpdateStatus();
+
+                    _list.Controls.Add(row);
+                    await Task.Yield();
                 }
-            });
+
+                UpdateStatus();
+            }
+            catch (Exception ex)
+            {
+                _list.Controls.Clear();
+                _status.Text = "加载失败";
+                MessageBox.Show(ex.Message, "错误", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+        }
+
+        private void UpdateStatus()
+        {
+            int total = _list.Controls.Count;
+            var selected = _list.Controls.OfType<ItemRow>().Where(r => r.Checked).ToList();
+            int selCount = selected.Count;
+            double selMb = selected.Sum(r => r.SizeBytes) / 1024.0 / 1024.0;
+            _status.Text = $"已加载 {total} 个安装包，选中 {selCount} 个（合计 {selMb:F1} MB）";
         }
 
         // ----------------- 安装逻辑 -----------------
@@ -333,13 +345,6 @@ namespace SoftwareInstaller
         }
 
         // ----------------- 工具 -----------------
-        private void Ui(Action action)
-        {
-            if (!IsHandleCreated) { action(); return; }
-            if (InvokeRequired) BeginInvoke(action);
-            else action();
-        }
-
         private static string? MsiGetProperty(string msiPath, string prop)
         {
             IntPtr hProd = IntPtr.Zero;
@@ -372,7 +377,9 @@ namespace SoftwareInstaller
     internal sealed class ItemRow : Panel
     {
         public event EventHandler? OnPrimaryClick;
+        public event EventHandler? OnCheckChanged;
 
+        private readonly CheckBox _check;
         private readonly PictureBox _icon;
         private readonly Label _name;
         private readonly Label _detail;
@@ -380,9 +387,11 @@ namespace SoftwareInstaller
         private readonly ModernButton _btn;
 
         private readonly Color _line;
+        public long SizeBytes { get; }
+        public bool Checked => _check.Checked;
 
         public ItemRow(string? iconPath, string displayName, string detailLine, string description,
-                       string buttonText, Color primary, Color primaryHover, Color text, Color subText, Color line)
+                       string buttonText, Color primary, Color primaryHover, Color text, Color subText, Color line, long sizeBytes)
         {
             DoubleBuffered = true;
             Height = 92; // 与图相近
@@ -391,11 +400,20 @@ namespace SoftwareInstaller
             Padding = new Padding(12, 10, 12, 10);
             Margin = new Padding(0);
             _line = line;
+            SizeBytes = sizeBytes;
+
+            _check = new CheckBox
+            {
+                AutoSize = true,
+                Location = new Point(12, 35)
+            };
+            _check.CheckedChanged += (s, e) => OnCheckChanged?.Invoke(this, EventArgs.Empty);
+            Controls.Add(_check);
 
             _icon = new PictureBox
             {
                 Size = new Size(44, 44),
-                Location = new Point(12, 12),
+                Location = new Point(44, 12),
                 SizeMode = PictureBoxSizeMode.Zoom
             };
             if (!string.IsNullOrWhiteSpace(iconPath) && File.Exists(iconPath))
@@ -419,8 +437,8 @@ namespace SoftwareInstaller
             _name = new Label
             {
                 AutoSize = false,
-                Location = new Point(68, 10),
-                Size = new Size(640, 26),
+                Location = new Point(100, 10),
+                Size = new Size(608, 26),
                 Font = new Font("Segoe UI Semibold", 13f),
                 ForeColor = text,
                 Text = displayName
@@ -430,8 +448,8 @@ namespace SoftwareInstaller
             _detail = new Label
             {
                 AutoSize = false,
-                Location = new Point(68, 36),
-                Size = new Size(640, 20),
+                Location = new Point(100, 36),
+                Size = new Size(608, 20),
                 Font = new Font("Segoe UI", 10.5f),
                 ForeColor = subText,
                 Text = detailLine
@@ -441,8 +459,8 @@ namespace SoftwareInstaller
             _desc = new Label
             {
                 AutoSize = false,
-                Location = new Point(68, 56),
-                Size = new Size(640, 20),
+                Location = new Point(100, 56),
+                Size = new Size(608, 20),
                 Font = new Font("Segoe UI", 10.5f),
                 ForeColor = subText,
                 Text = description,
