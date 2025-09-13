@@ -1,0 +1,14 @@
+D:\Projects\cs\SoftwareInstaller\bin\Debug\net10.0-windows\SoftwareInstaller.exe
+D:\Projects\cs\SoftwareInstaller\bin\Debug\net10.0-windows\SoftwareInstaller.deps.json
+D:\Projects\cs\SoftwareInstaller\bin\Debug\net10.0-windows\SoftwareInstaller.runtimeconfig.json
+D:\Projects\cs\SoftwareInstaller\bin\Debug\net10.0-windows\SoftwareInstaller.dll
+D:\Projects\cs\SoftwareInstaller\bin\Debug\net10.0-windows\SoftwareInstaller.pdb
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\SoftwareInstaller.GeneratedMSBuildEditorConfig.editorconfig
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\SoftwareInstaller.AssemblyInfoInputs.cache
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\SoftwareInstaller.AssemblyInfo.cs
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\SoftwareInstaller.csproj.CoreCompileInputs.cache
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\SoftwareInstaller.dll
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\refint\SoftwareInstaller.dll
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\SoftwareInstaller.pdb
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\SoftwareInstaller.genruntimeconfig.cache
+D:\Projects\cs\SoftwareInstaller\obj\Debug\net10.0-windows\ref\SoftwareInstaller.dll
