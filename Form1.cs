@@ -65,7 +65,8 @@ namespace SoftwareInstaller
         {
             base.Text = "软件列表";
             StartPosition = FormStartPosition.CenterScreen;
-            MinimumSize = new Size(980, 620);
+            Size = new Size(980, 820);
+            MinimumSize = new Size(980, 820);
             BackColor = C_BG;
             Font = F_Body;
 
@@ -109,6 +110,7 @@ namespace SoftwareInstaller
                 AutoScroll = true,
                 BackColor = C_BG
             };
+            _list.SizeChanged += (_, __) => AdjustRowWidths();
             _content.Controls.Add(_list);
             Controls.Add(_content);
 
@@ -192,6 +194,7 @@ namespace SoftwareInstaller
 
                     row.OnPrimaryClick += async (_, __) =>
                     {
+
                         var fullPath = row.Tag as string;
                         if (!string.IsNullOrWhiteSpace(fullPath))
                             await InstallAsync(fullPath!);
@@ -199,6 +202,9 @@ namespace SoftwareInstaller
                     row.OnCheckChanged += (_, __) => UpdateStatus();
 
                     _list.Controls.Add(row);
+
+                    AdjustRowWidths();
+
                     await Task.Yield();
                 }
 
@@ -219,8 +225,14 @@ namespace SoftwareInstaller
 
         internal void SetSharePath(string path) => _sharePath = path;
 
-
         private readonly record struct RowInfo(string Path, long SizeBytes, string? Icon, string DisplayName, string Detail, string Description);
+
+        private void AdjustRowWidths()
+        {
+            foreach (var row in _list.Controls.OfType<ItemRow>())
+                row.Width = _list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
+        }
+
 
         private void UpdateStatus()
         {
@@ -395,7 +407,6 @@ namespace SoftwareInstaller
         {
             DoubleBuffered = true;
             Height = 92; // 与图相近
-            Dock = DockStyle.Top;
             BackColor = Color.Transparent;
             Padding = new Padding(12, 10, 12, 10);
             Margin = new Padding(0);
