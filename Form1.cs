@@ -12,6 +12,7 @@ using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
@@ -135,10 +136,13 @@ namespace SoftwareInstaller
 
             try
             {
-                var rows = await Task.Run(() =>
+                var channel = Channel.CreateUnbounded<RowInfo>();
+                var reader = channel.Reader;
+                var writer = channel.Writer;
+
+                _ = Task.Run(() =>
                 {
                     threadObserver?.Invoke(Thread.CurrentThread.ManagedThreadId);
-                    var list = new List<RowInfo>();
 
                     void Work()
                     {
@@ -156,26 +160,33 @@ namespace SoftwareInstaller
                             var detail = $"{(string.IsNullOrWhiteSpace(ver) ? "" : "v " + ver + " · ")}{Path.GetExtension(path).ToLower()} · {(size / 1024.0 / 1024.0):F1} MB";
                             var desc = _catalog.TryGet(fileName, out var ci2) ? (ci2.Description ?? "") : "";
                             var icon = _catalog.TryGet(fileName, out var ci) ? ci.Icon : null;
-                            list.Add(new RowInfo(path, size, icon, disp, detail, desc));
+                            writer.TryWrite(new RowInfo(path, size, icon, disp, detail, desc));
                         }
                     }
 
-                    if (_useCredentials)
+                    try
                     {
-                        using var imp = new ImpersonationHelper(_domain, _username, _password);
-                        imp.Run(Work);
-                    }
-                    else
-                    {
-                        Work();
-                    }
+                        if (_useCredentials)
+                        {
+                            using var imp = new ImpersonationHelper(_domain, _username, _password);
+                            imp.Run(Work);
+                        }
+                        else
+                        {
+                            Work();
+                        }
 
-                    return list;
+                        writer.Complete();
+                    }
+                    catch (Exception ex)
+                    {
+                        writer.Complete(ex);
+                    }
                 });
 
                 _list.Controls.Clear();
 
-                foreach (var info in rows)
+                await foreach (var info in reader.ReadAllAsync())
                 {
                     var row = new ItemRow(
                         iconPath: info.Icon,
