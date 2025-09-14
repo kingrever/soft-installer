@@ -51,9 +51,6 @@ namespace SoftwareInstaller
         private Label _appTitle = default!;
         private ModernButton _btnRefresh = default!;
 
-        private Panel _toolCard = default!;
-        private TextBox _tbShare = default!;
-
         private Panel _content = default!;
         private FlowLayoutPanel _list = default!;  // 竖向堆叠的行卡片
 
@@ -66,7 +63,7 @@ namespace SoftwareInstaller
 
         public Form1()
         {
-            base.Text = "软件安装器";
+            base.Text = "软件列表";
             StartPosition = FormStartPosition.CenterScreen;
             MinimumSize = new Size(980, 620);
             BackColor = C_BG;
@@ -84,7 +81,7 @@ namespace SoftwareInstaller
             _appBar = new Panel { Dock = DockStyle.Top, Height = 72, BackColor = C_Card, Padding = new Padding(24, 14, 24, 14) };
             Controls.Add(_appBar);
 
-            _appTitle = new Label { Text = "软件安装器", Dock = DockStyle.Left, AutoSize = true, Font = F_Title, ForeColor = C_Text, Padding = new Padding(0, 4, 16, 4) };
+            _appTitle = new Label { Text = "软件列表", Dock = DockStyle.Left, AutoSize = true, Font = F_Title, ForeColor = C_Text, Padding = new Padding(0, 4, 16, 4) };
             _appBar.Controls.Add(_appTitle);
 
             _btnRefresh = new ModernButton
@@ -101,23 +98,6 @@ namespace SoftwareInstaller
             };
             _btnRefresh.Click += async (_, __) => await LoadListAsync();
             _appBar.Controls.Add(_btnRefresh);
-
-            // 工具带（路径输入卡片）
-            _toolCard = new Panel { Dock = DockStyle.Top, Height = 64, BackColor = C_Card, Padding = new Padding(16), Margin = new Padding(0) };
-            _toolCard.Paint += (s, e) =>
-            {
-                var rect = _toolCard.ClientRectangle; rect.Inflate(-1, -1);
-                using var pen = new Pen(C_Line, 1);
-                e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
-                UiDrawing.DrawRoundRect(e.Graphics, pen, rect, 12);
-            };
-            var inner = new Panel { Dock = DockStyle.Fill, BackColor = C_Card, Padding = new Padding(8, 2, 8, 2) };
-            var icon = new Label { Text = "📂", Dock = DockStyle.Left, AutoSize = true, ForeColor = C_SubText, Padding = new Padding(2, 6, 8, 6) };
-            _tbShare = new TextBox { Text = _sharePath, BorderStyle = BorderStyle.None, Dock = DockStyle.Fill, ForeColor = C_Text, BackColor = C_Card, Font = F_Body };
-            inner.Controls.Add(_tbShare);
-            inner.Controls.Add(icon);
-            _toolCard.Controls.Add(inner);
-            Controls.Add(_toolCard);
 
             // 内容区（滚动列表）
             _content = new Panel { Dock = DockStyle.Fill, Padding = new Padding(20, 14, 20, 12), BackColor = C_BG };
@@ -144,7 +124,7 @@ namespace SoftwareInstaller
         // ----------------- 数据加载 -----------------
         internal async Task LoadListAsync(Action<int>? threadObserver = null)
         {
-            var share = _tbShare.Text.Trim();
+            var share = _sharePath.Trim();
             _status.Text = "加载中…";
             _progress.Visible = true;
 
@@ -205,6 +185,7 @@ namespace SoftwareInstaller
                         line: C_Line,
                         sizeBytes: info.SizeBytes
                     )
+
                     {
                         Tag = info.Path
                     };
@@ -235,7 +216,9 @@ namespace SoftwareInstaller
             }
         }
 
-        internal void SetSharePath(string path) => _tbShare.Text = path;
+
+        internal void SetSharePath(string path) => _sharePath = path;
+
 
         private readonly record struct RowInfo(string Path, long SizeBytes, string? Icon, string DisplayName, string Detail, string Description);
 
