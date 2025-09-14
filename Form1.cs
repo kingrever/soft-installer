@@ -185,6 +185,7 @@ namespace SoftwareInstaller
                         line: C_Line,
                         sizeBytes: info.SizeBytes
                     )
+
                     {
                         Tag = info.Path
                     };
@@ -215,7 +216,9 @@ namespace SoftwareInstaller
             }
         }
 
+
         internal void SetSharePath(string path) => _sharePath = path;
+
 
         private readonly record struct RowInfo(string Path, long SizeBytes, string? Icon, string DisplayName, string Detail, string Description);
 
