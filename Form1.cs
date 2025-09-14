@@ -63,9 +63,11 @@ namespace SoftwareInstaller
 
         public Form1()
         {
+
             base.Text = "软件安装";
             StartPosition = FormStartPosition.CenterScreen;
             Size = new Size(600, 800);
+
             BackColor = C_BG;
             Font = F_Body;
 
@@ -81,7 +83,9 @@ namespace SoftwareInstaller
             _appBar = new Panel { Dock = DockStyle.Top, Height = 72, BackColor = C_Card, Padding = new Padding(24, 14, 24, 14) };
             Controls.Add(_appBar);
 
+
             _appTitle = new Label { Text = "软件安装", Dock = DockStyle.Left, AutoSize = true, Font = F_Title, ForeColor = C_Text, Padding = new Padding(0, 4, 16, 4) };
+
             _appBar.Controls.Add(_appTitle);
 
             _btnRefresh = new ModernButton
@@ -186,12 +190,14 @@ namespace SoftwareInstaller
                         line: C_Line,
                         sizeBytes: info.SizeBytes
                     )
+
                     {
                         Tag = info.Path
                     };
 
                     row.OnPrimaryClick += async (_, __) =>
                     {
+
                         var fullPath = row.Tag as string;
                         if (!string.IsNullOrWhiteSpace(fullPath))
                             await InstallAsync(fullPath!);
@@ -199,7 +205,9 @@ namespace SoftwareInstaller
                     row.OnCheckChanged += (_, __) => UpdateStatus();
 
                     _list.Controls.Add(row);
+
                     AdjustRowWidths();
+
                     await Task.Yield();
                 }
 
@@ -217,6 +225,7 @@ namespace SoftwareInstaller
             }
         }
 
+
         internal void SetSharePath(string path) => _sharePath = path;
 
         private readonly record struct RowInfo(string Path, long SizeBytes, string? Icon, string DisplayName, string Detail, string Description);
@@ -226,6 +235,7 @@ namespace SoftwareInstaller
             foreach (var row in _list.Controls.OfType<ItemRow>())
                 row.Width = _list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
         }
+
 
         private void UpdateStatus()
         {
@@ -399,6 +409,10 @@ namespace SoftwareInstaller
                        string buttonText, Color primary, Color primaryHover, Color text, Color subText, Color line, long sizeBytes)
         {
             DoubleBuffered = true;
+
+
+            Height = 92; // 与图相近
+
             BackColor = Color.Transparent;
             Padding = new Padding(12, 10, 12, 10);
             Margin = new Padding(0);
@@ -439,8 +453,10 @@ namespace SoftwareInstaller
 
             _name = new Label
             {
+
                 AutoSize = true,
                 Location = new Point(100, 10),
+
                 Font = new Font("Segoe UI Semibold", 13f),
                 ForeColor = text,
                 Text = displayName
@@ -449,8 +465,10 @@ namespace SoftwareInstaller
 
             _detail = new Label
             {
+
                 AutoSize = true,
                 Location = new Point(100, 36),
+
                 Font = new Font("Segoe UI", 10.5f),
                 ForeColor = subText,
                 Text = detailLine
@@ -459,8 +477,10 @@ namespace SoftwareInstaller
 
             _desc = new Label
             {
+
                 AutoSize = true,
                 Location = new Point(100, 56),
+
                 Font = new Font("Segoe UI", 10.5f),
                 ForeColor = subText,
                 Text = description,
