@@ -13,6 +13,7 @@ using System.Security.Principal;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using Microsoft.Win32.SafeHandles;
@@ -61,6 +62,7 @@ namespace SoftwareInstaller
 
         // 数据
         private Catalog _catalog = new();
+        private readonly MetadataCache _metadataCache = new(Path.Combine(AppContext.BaseDirectory, "metadata.json"));
 
         public Form1()
         {
@@ -75,6 +77,7 @@ namespace SoftwareInstaller
             BuildUI();
 
             Shown += async (_, __) => await LoadListAsync();
+            FormClosed += (_, __) => _metadataCache.Save();
         }
 
         // ----------------- 构建 UI -----------------
@@ -136,10 +139,16 @@ namespace SoftwareInstaller
 
             try
             {
-                var rows = await Task.Run(() =>
+                var channel = Channel.CreateUnbounded<RowInfo>();
+                var reader = channel.Reader;
+                var writer = channel.Writer;
+
+                _ = Task.Run(() =>
                 {
                     threadObserver?.Invoke(Thread.CurrentThread.ManagedThreadId);
+
                     var bag = new ConcurrentBag<RowInfo>();
+
 
                     // Collect catalog and file list under impersonation if required
                     List<string> files = new();
@@ -148,18 +157,22 @@ namespace SoftwareInstaller
                         _catalog = TryLoadCatalog(Path.Combine(share, _catalogFileName));
                         if (!Directory.Exists(share)) throw new IOException("无法访问共享路径：" + share);
 
+
                         files = Directory.EnumerateFiles(share, "*.*", SearchOption.TopDirectoryOnly)
                             .Where(p => new[] { ".msi", ".exe" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
                             .ToList();
+
                     }
 
-                    if (_useCredentials)
+                    try
                     {
                         using var imp = new ImpersonationHelper(_domain, _username, _password);
                         imp.Run(Collect);
+
                     }
-                    else
+                    catch (Exception ex)
                     {
+
                         Collect();
                     }
 
@@ -190,11 +203,12 @@ namespace SoftwareInstaller
                         imp => imp?.Dispose());
 
                     return bag.OrderBy(info => Path.GetFileName(info.Path)).ToList();
+
                 });
 
                 _list.Controls.Clear();
 
-                foreach (var info in rows)
+                await foreach (var info in reader.ReadAllAsync())
                 {
                     var row = new ItemRow(
                         iconPath: info.Icon,
@@ -240,6 +254,7 @@ namespace SoftwareInstaller
             }
             finally
             {
+                _metadataCache.Save();
                 _progress.Visible = false;
             }
         }
