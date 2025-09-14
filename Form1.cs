@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Collections.Concurrent;
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
@@ -138,39 +139,57 @@ namespace SoftwareInstaller
                 var rows = await Task.Run(() =>
                 {
                     threadObserver?.Invoke(Thread.CurrentThread.ManagedThreadId);
-                    var list = new List<RowInfo>();
+                    var bag = new ConcurrentBag<RowInfo>();
 
-                    void Work()
+                    // Collect catalog and file list under impersonation if required
+                    List<string> files = new();
+                    void Collect()
                     {
                         _catalog = TryLoadCatalog(Path.Combine(share, _catalogFileName));
                         if (!Directory.Exists(share)) throw new IOException("无法访问共享路径：" + share);
 
-                        foreach (var path in Directory.EnumerateFiles(share, "*.*", SearchOption.TopDirectoryOnly)
-                                 .Where(p => new[] { ".msi", ".exe" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
-                                 .OrderBy(Path.GetFileName))
-                        {
-                            var fi = new FileInfo(path);
-                            var size = fi.Length;
-                            var fileName = Path.GetFileName(path);
-                            var (disp, ver) = GetDisplayAndVersion(path, _catalog);
-                            var detail = $"{(string.IsNullOrWhiteSpace(ver) ? "" : "v " + ver + " · ")}{Path.GetExtension(path).ToLower()} · {(size / 1024.0 / 1024.0):F1} MB";
-                            var desc = _catalog.TryGet(fileName, out var ci2) ? (ci2.Description ?? "") : "";
-                            var icon = _catalog.TryGet(fileName, out var ci) ? ci.Icon : null;
-                            list.Add(new RowInfo(path, size, icon, disp, detail, desc));
-                        }
+                        files = Directory.EnumerateFiles(share, "*.*", SearchOption.TopDirectoryOnly)
+                            .Where(p => new[] { ".msi", ".exe" }.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
+                            .ToList();
                     }
 
                     if (_useCredentials)
                     {
                         using var imp = new ImpersonationHelper(_domain, _username, _password);
-                        imp.Run(Work);
+                        imp.Run(Collect);
                     }
                     else
                     {
-                        Work();
+                        Collect();
                     }
 
-                    return list;
+                    Parallel.ForEach(
+                        files,
+                        () => _useCredentials ? new ImpersonationHelper(_domain, _username, _password) : null,
+                        (path, _, imp) =>
+                        {
+                            void Process()
+                            {
+                                var fi = new FileInfo(path);
+                                var size = fi.Length;
+                                var fileName = Path.GetFileName(path);
+                                var (disp, ver) = GetDisplayAndVersion(path, _catalog);
+                                var detail = $"{(string.IsNullOrWhiteSpace(ver) ? "" : "v " + ver + " · ")}{Path.GetExtension(path).ToLower()} · {(size / 1024.0 / 1024.0):F1} MB";
+                                var desc = _catalog.TryGet(fileName, out var ci2) ? (ci2.Description ?? "") : "";
+                                var icon = _catalog.TryGet(fileName, out var ci) ? ci.Icon : null;
+                                bag.Add(new RowInfo(path, size, icon, disp, detail, desc));
+                            }
+
+                            if (imp != null)
+                                imp.Run(Process);
+                            else
+                                Process();
+
+                            return imp;
+                        },
+                        imp => imp?.Dispose());
+
+                    return bag.OrderBy(info => Path.GetFileName(info.Path)).ToList();
                 });
 
                 _list.Controls.Clear();
