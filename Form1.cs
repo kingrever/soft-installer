@@ -187,12 +187,14 @@ namespace SoftwareInstaller
                         line: C_Line,
                         sizeBytes: info.SizeBytes
                     )
+
                     {
                         Tag = info.Path
                     };
 
                     row.OnPrimaryClick += async (_, __) =>
                     {
+
                         var fullPath = row.Tag as string;
                         if (!string.IsNullOrWhiteSpace(fullPath))
                             await InstallAsync(fullPath!);
@@ -200,7 +202,9 @@ namespace SoftwareInstaller
                     row.OnCheckChanged += (_, __) => UpdateStatus();
 
                     _list.Controls.Add(row);
+
                     AdjustRowWidths();
+
                     await Task.Yield();
                 }
 
@@ -218,6 +222,7 @@ namespace SoftwareInstaller
             }
         }
 
+
         internal void SetSharePath(string path) => _sharePath = path;
 
         private readonly record struct RowInfo(string Path, long SizeBytes, string? Icon, string DisplayName, string Detail, string Description);
@@ -227,6 +232,7 @@ namespace SoftwareInstaller
             foreach (var row in _list.Controls.OfType<ItemRow>())
                 row.Width = _list.ClientSize.Width - SystemInformation.VerticalScrollBarWidth;
         }
+
 
         private void UpdateStatus()
         {
