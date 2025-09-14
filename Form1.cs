@@ -60,6 +60,7 @@ namespace SoftwareInstaller
 
         // 数据
         private Catalog _catalog = new();
+        private readonly MetadataCache _metadataCache = new(Path.Combine(AppContext.BaseDirectory, "metadata.json"));
 
         public Form1()
         {
@@ -74,6 +75,7 @@ namespace SoftwareInstaller
             BuildUI();
 
             Shown += async (_, __) => await LoadListAsync();
+            FormClosed += (_, __) => _metadataCache.Save();
         }
 
         // ----------------- 构建 UI -----------------
@@ -152,7 +154,21 @@ namespace SoftwareInstaller
                             var fi = new FileInfo(path);
                             var size = fi.Length;
                             var fileName = Path.GetFileName(path);
-                            var (disp, ver) = GetDisplayAndVersion(path, _catalog);
+                            var lwt = fi.LastWriteTimeUtc;
+
+                            string disp;
+                            string? ver;
+                            if (_metadataCache.TryGet(path, lwt, size, out var cached))
+                            {
+                                disp = cached.DisplayName;
+                                ver = cached.Version;
+                            }
+                            else
+                            {
+                                (disp, ver) = GetDisplayAndVersion(path, _catalog);
+                                _metadataCache.Update(path, lwt, size, disp, ver);
+                            }
+
                             var detail = $"{(string.IsNullOrWhiteSpace(ver) ? "" : "v " + ver + " · ")}{Path.GetExtension(path).ToLower()} · {(size / 1024.0 / 1024.0):F1} MB";
                             var desc = _catalog.TryGet(fileName, out var ci2) ? (ci2.Description ?? "") : "";
                             var icon = _catalog.TryGet(fileName, out var ci) ? ci.Icon : null;
@@ -221,6 +237,7 @@ namespace SoftwareInstaller
             }
             finally
             {
+                _metadataCache.Save();
                 _progress.Visible = false;
             }
         }
