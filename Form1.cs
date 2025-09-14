@@ -63,10 +63,11 @@ namespace SoftwareInstaller
 
         public Form1()
         {
-            base.Text = "软件列表";
+
+            base.Text = "软件安装";
             StartPosition = FormStartPosition.CenterScreen;
-            Size = new Size(980, 820);
-            MinimumSize = new Size(980, 820);
+            Size = new Size(600, 800);
+
             BackColor = C_BG;
             Font = F_Body;
 
@@ -82,7 +83,9 @@ namespace SoftwareInstaller
             _appBar = new Panel { Dock = DockStyle.Top, Height = 72, BackColor = C_Card, Padding = new Padding(24, 14, 24, 14) };
             Controls.Add(_appBar);
 
-            _appTitle = new Label { Text = "软件列表", Dock = DockStyle.Left, AutoSize = true, Font = F_Title, ForeColor = C_Text, Padding = new Padding(0, 4, 16, 4) };
+
+            _appTitle = new Label { Text = "软件安装", Dock = DockStyle.Left, AutoSize = true, Font = F_Title, ForeColor = C_Text, Padding = new Padding(0, 4, 16, 4) };
+
             _appBar.Controls.Add(_appTitle);
 
             _btnRefresh = new ModernButton
@@ -406,7 +409,10 @@ namespace SoftwareInstaller
                        string buttonText, Color primary, Color primaryHover, Color text, Color subText, Color line, long sizeBytes)
         {
             DoubleBuffered = true;
+
+
             Height = 92; // 与图相近
+
             BackColor = Color.Transparent;
             Padding = new Padding(12, 10, 12, 10);
             Margin = new Padding(0);
@@ -447,9 +453,10 @@ namespace SoftwareInstaller
 
             _name = new Label
             {
-                AutoSize = false,
+
+                AutoSize = true,
                 Location = new Point(100, 10),
-                Size = new Size(608, 26),
+
                 Font = new Font("Segoe UI Semibold", 13f),
                 ForeColor = text,
                 Text = displayName
@@ -458,9 +465,10 @@ namespace SoftwareInstaller
 
             _detail = new Label
             {
-                AutoSize = false,
+
+                AutoSize = true,
                 Location = new Point(100, 36),
-                Size = new Size(608, 20),
+
                 Font = new Font("Segoe UI", 10.5f),
                 ForeColor = subText,
                 Text = detailLine
@@ -469,9 +477,10 @@ namespace SoftwareInstaller
 
             _desc = new Label
             {
-                AutoSize = false,
+
+                AutoSize = true,
                 Location = new Point(100, 56),
-                Size = new Size(608, 20),
+
                 Font = new Font("Segoe UI", 10.5f),
                 ForeColor = subText,
                 Text = description,
@@ -491,6 +500,35 @@ namespace SoftwareInstaller
             };
             _btn.Click += (s, e) => OnPrimaryClick?.Invoke(this, EventArgs.Empty);
             Controls.Add(_btn);
+
+            Relayout();
+        }
+
+        private void Relayout()
+        {
+            int textX = 100;
+            int btnMargin = 20;
+            int textWidth = Width - textX - _btn.Width - btnMargin - Padding.Right;
+            if (textWidth < 0) textWidth = 0;
+
+            _name.MaximumSize = new Size(textWidth, 0);
+            _detail.MaximumSize = new Size(textWidth, 0);
+            _desc.MaximumSize = new Size(textWidth, 0);
+
+            _name.Location = new Point(textX, 10);
+            _detail.Location = new Point(textX, _name.Bottom + 4);
+            _desc.Location = new Point(textX, _detail.Bottom + 4);
+
+            int contentBottom = Math.Max(_icon.Bottom, _desc.Bottom);
+            Height = contentBottom + Padding.Bottom;
+
+            _btn.Location = new Point(Width - _btn.Width - btnMargin, (Height - _btn.Height) / 2);
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            Relayout();
         }
 
         protected override void OnPaint(PaintEventArgs e)
